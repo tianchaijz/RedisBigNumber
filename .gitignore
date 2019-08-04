@@ -10,3 +10,6 @@
 *.swo
 *.un~
 *.DS_Store
+
+dump.rdb
+test
