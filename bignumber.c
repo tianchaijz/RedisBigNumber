@@ -116,8 +116,8 @@ static inline int bn_incr_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
     free(str);
     mpd_del(dec);
 
-    reply = hash ? RedisModule_Call(ctx, "HSET", "sss", hash, key, dest)
-                 : RedisModule_Call(ctx, "SET", "ss", key, dest);
+    reply = hash ? RedisModule_Call(ctx, "HSET", "sss!", hash, key, dest)
+                 : RedisModule_Call(ctx, "SET", "ss!", key, dest);
     if (RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_ERROR) {
         RedisModule_ReplyWithCallReply(ctx, reply);
         return REDISMODULE_ERR;
