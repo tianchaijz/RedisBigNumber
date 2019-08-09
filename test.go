@@ -37,7 +37,11 @@ var (
 type Operation int
 
 const (
-	OpPING Operation = iota
+	OpADD Operation = iota
+	OpSUB
+	OpMUL
+	OpDIV
+	OpTO_FIXED
 	OpINCR
 	OpDECR
 	OpINCRBY
@@ -56,68 +60,59 @@ func doCmd(client *redis.Client, args ...interface{}) interface{} {
 	return val
 }
 
-func ping(client *redis.Client) {
-	client.Ping()
+func cmdAdd(client *redis.Client) {
+	doCmd(client, "bn.add", gDelta, gDelta)
 }
 
-func incr(client *redis.Client) {
+func cmdSub(client *redis.Client) {
+	doCmd(client, "bn.sub", gDelta, gDelta)
+}
+
+func cmdMul(client *redis.Client) {
+	doCmd(client, "bn.mul", gDelta, gDelta)
+}
+
+func cmdDiv(client *redis.Client) {
+	doCmd(client, "bn.div", gDelta, gDelta)
+}
+
+func cmdToFixed(client *redis.Client) {
+	doCmd(client, "bn.to_fixed", "0.123456789", 2)
+}
+
+func cmdIncr(client *redis.Client) {
 	doCmd(client, "bn.incr", gRadixKey)
 }
 
-func decr(client *redis.Client) {
+func cmdDecr(client *redis.Client) {
 	doCmd(client, "bn.decr", gRadixKey)
 }
 
-func incrby(client *redis.Client) {
+func cmdIncrby(client *redis.Client) {
 	doCmd(client, "bn.incrby", gFracKey, gDelta)
 }
 
-func decrby(client *redis.Client) {
+func cmdDecrby(client *redis.Client) {
 	doCmd(client, "bn.decrby", gFracKey, gDelta)
 }
 
-func hincr(client *redis.Client) {
+func cmdHincr(client *redis.Client) {
 	doCmd(client, "bn.hincr", gHash, gRadixKey)
 }
 
-func hdecr(client *redis.Client) {
+func cmdHdecr(client *redis.Client) {
 	doCmd(client, "bn.hdecr", gHash, gRadixKey)
 }
 
-func hincrby(client *redis.Client) {
+func cmdHincrby(client *redis.Client) {
 	doCmd(client, "bn.hincrby", gHash, gFracKey, gDelta)
 }
 
-func hdecrby(client *redis.Client) {
+func cmdHdecrby(client *redis.Client) {
 	doCmd(client, "bn.hdecrby", gHash, gFracKey, gDelta)
 }
 
-func loop(op Operation) {
-	var (
-		cmd func(client *redis.Client)
-	)
-
-	switch op {
-	case OpPING:
-		cmd = ping
-	case OpINCR:
-		cmd = incr
-	case OpDECR:
-		cmd = decr
-	case OpINCRBY:
-		cmd = incrby
-	case OpDECRBY:
-		cmd = decrby
-	case OpHINCR:
-		cmd = hincr
-	case OpHDECR:
-		cmd = hdecr
-	case OpHINCRBY:
-		cmd = hincrby
-	case OpHDECRBY:
-		cmd = hdecrby
-	}
-
+func loop(cmd func(client *redis.Client)) {
 	gWg.Add(1)
 	defer gWg.Done()
 
@@ -162,21 +157,27 @@ func bench() {
 	ops := []struct {
 		op   Operation
 		name string
+		cmd  func(client *redis.Client)
 	}{
-		{OpINCR, "OpINCR"},
-		{OpDECR, "OpDECR"},
-		{OpINCRBY, "OpINCRBY"},
-		{OpDECRBY, "OpDECRBY"},
-		{OpHINCR, "OpHINCR"},
-		{OpHDECR, "OpHDECR"},
-		{OpHINCRBY, "OpHINCRBY"},
-		{OpHDECRBY, "OpHDECRBY"},
+		{OpADD, "OpADD", cmdAdd},
+		{OpSUB, "OpSUB", cmdSub},
+		{OpMUL, "OpMUL", cmdMul},
+		{OpDIV, "OpDIV", cmdDiv},
+		{OpTO_FIXED, "OpTO_FIXED", cmdToFixed},
+		{OpINCR, "OpINCR", cmdIncr},
+		{OpDECR, "OpDECR", cmdDecr},
+		{OpINCRBY, "OpINCRBY", cmdIncrby},
+		{OpDECRBY, "OpDECRBY", cmdDecrby},
+		{OpHINCR, "OpHINCR", cmdHincr},
+		{OpHDECR, "OpHDECR", cmdHdecr},
+		{OpHINCRBY, "OpHINCRBY", cmdHincrby},
+		{OpHDECRBY, "OpHDECRBY", cmdHdecrby},
 	}
 
 	for i := 0; i < *gClients; i++ {
 		op := ops[rand.Intn(len(ops))]
 		log.Printf("[%2d]%s", i, op.name)
-		go loop(op.op)
+		go loop(op.cmd)
 	}
 }
 

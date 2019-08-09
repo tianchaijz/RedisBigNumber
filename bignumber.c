@@ -11,6 +11,13 @@
 
 #include <mpdecimal.h>
 
+typedef enum {
+    op_add = 0,
+    op_sub,
+    op_mul,
+    op_div,
+} bn_op_t;
+
 static mpd_context_t mpd_ctx;
 static mpd_t *mpd_zero;
 static mpd_t *mpd_one;
@@ -31,6 +38,61 @@ static inline mpd_t *decimal(const char *s, int prec) {
     }
 
     return dec;
+}
+
+static inline int bn_op_helper(RedisModuleCtx *ctx, RedisModuleString **argv,
+                               int argc, bn_op_t op) {
+    size_t len;
+    char *str;
+    const char *val;
+    mpd_t *lhs, *rhs;
+    RedisModuleString *dest;
+
+    if (argc != 3) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    val = RedisModule_StringPtrLen(argv[1], NULL);
+    lhs = decimal(val, 0);
+    if (lhs == NULL) {
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    val = RedisModule_StringPtrLen(argv[2], NULL);
+    rhs = decimal(val, 0);
+    if (rhs == NULL) {
+        mpd_del(lhs);
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    switch (op) {
+    case op_add:
+        mpd_add(lhs, lhs, rhs, &mpd_ctx);
+        break;
+    case op_sub:
+        mpd_sub(lhs, lhs, rhs, &mpd_ctx);
+        break;
+    case op_mul:
+        mpd_mul(lhs, lhs, rhs, &mpd_ctx);
+        break;
+    case op_div:
+        if (mpd_cmp(rhs, mpd_zero, &mpd_ctx) == 0) {
+            mpd_del(lhs);
+            mpd_del(rhs);
+            return RedisModule_ReplyWithError(ctx, "ERR division by zero");
+        }
+        mpd_div(lhs, lhs, rhs, &mpd_ctx);
+        break;
+    }
+
+    len = mpd_to_sci_size(&str, lhs, 0);
+    dest = RedisModule_CreateString(ctx, str, len);
+
+    free(str);
+    mpd_del(lhs);
+    mpd_del(rhs);
+
+    return RedisModule_ReplyWithString(ctx, dest);
 }
 
 static inline int bn_get_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
@@ -180,6 +242,61 @@ static inline int bn_hincrby_helper(RedisModuleCtx *ctx,
     return rc;
 }
 
+int cmd_ADD(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    return bn_op_helper(ctx, argv, argc, op_add);
+}
+
+int cmd_SUB(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    return bn_op_helper(ctx, argv, argc, op_sub);
+}
+
+int cmd_MUL(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    return bn_op_helper(ctx, argv, argc, op_mul);
+}
+
+int cmd_DIV(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    return bn_op_helper(ctx, argv, argc, op_div);
+}
+
+int cmd_TO_FIXED(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    size_t len;
+    char *str;
+    long long digits;
+    const char *val;
+    mpd_t *dec;
+    RedisModuleString *dest;
+
+    RedisModule_AutoMemory(ctx);
+
+    if (argc != 3) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    if (RedisModule_StringToLongLong(argv[2], &digits) != REDISMODULE_OK) {
+        return RedisModule_ReplyWithError(ctx, "ERR invalid digits parameter");
+    }
+
+    val = RedisModule_StringPtrLen(argv[1], NULL);
+    dec = decimal(val, 0);
+    if (dec == NULL) {
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    mpd_rescale(dec, dec, -digits, &mpd_ctx);
+
+    len = mpd_to_sci_size(&str, dec, 0);
+    dest = RedisModule_CreateString(ctx, str, len);
+
+    free(str);
+    mpd_del(dec);
+
+    return RedisModule_ReplyWithString(ctx, dest);
+}
+
 int cmd_GET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long prec;
 
@@ -193,7 +310,7 @@ int cmd_GET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc == 3) {
         if (RedisModule_StringToLongLong(argv[2], &prec) != REDISMODULE_OK) {
             return RedisModule_ReplyWithError(
-                ctx, "ERR invalid precision parameters");
+                ctx, "ERR invalid precision parameter");
         }
     }
 
@@ -243,7 +360,7 @@ int cmd_HGET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc == 4) {
         if (RedisModule_StringToLongLong(argv[3], &prec) != REDISMODULE_OK) {
             return RedisModule_ReplyWithError(
-                ctx, "ERR invalid precision parameters");
+                ctx, "ERR invalid precision parameter");
         }
     }
 
@@ -302,6 +419,32 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv,
 
     if (RedisModule_Init(ctx, "bn", 1, REDISMODULE_APIVER_1) ==
         REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisModule_CreateCommand(ctx, "bn.add", cmd_ADD, "readonly fast", 0,
+                                  0, 0) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisModule_CreateCommand(ctx, "bn.sub", cmd_SUB, "readonly fast", 0,
+                                  0, 0) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisModule_CreateCommand(ctx, "bn.mul", cmd_MUL, "readonly fast", 0,
+                                  0, 0) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisModule_CreateCommand(ctx, "bn.div", cmd_DIV, "readonly fast", 0,
+                                  0, 0) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisModule_CreateCommand(ctx, "bn.to_fixed", cmd_TO_FIXED,
+                                  "readonly fast", 0, 0,
+                                  0) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
