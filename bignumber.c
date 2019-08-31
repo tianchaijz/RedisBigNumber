@@ -22,7 +22,8 @@ static mpd_context_t mpd_ctx;
 static mpd_t *mpd_zero;
 static mpd_t *mpd_one;
 
-static inline mpd_t *decimal(const char *s, int prec) {
+/* digits: the number of digits to appear after the decimal point. */
+static inline mpd_t *decimal(const char *s, int digits) {
     mpd_ctx.status = 0;
 
     mpd_t *dec = mpd_new(&mpd_ctx);
@@ -33,8 +34,8 @@ static inline mpd_t *decimal(const char *s, int prec) {
         return NULL;
     }
 
-    if (prec != 0) {
-        mpd_rescale(dec, dec, -prec, &mpd_ctx);
+    if (digits != 0) {
+        mpd_rescale(dec, dec, -digits, &mpd_ctx);
     }
 
     return dec;
@@ -96,7 +97,7 @@ static inline int bn_op_helper(RedisModuleCtx *ctx, RedisModuleString **argv,
 }
 
 static inline int bn_get_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
-                                RedisModuleString *key, int prec) {
+                                RedisModuleString *key, int digits) {
     static char buf[256];
     size_t len;
     char *str;
@@ -116,7 +117,7 @@ static inline int bn_get_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
     if (val != NULL) {
         memcpy(buf, val, len);
         buf[len] = '\0';
-        dec = decimal(buf, prec);
+        dec = decimal(buf, digits);
         if (dec == NULL) {
             return RedisModule_ReplyWithError(ctx,
                                               REDISMODULE_ERRORMSG_WRONGTYPE);
@@ -286,7 +287,7 @@ int cmd_TO_FIXED(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
-    mpd_rescale(dec, dec, -digits, &mpd_ctx);
+    mpd_rescale(dec, dec, -(int)digits, &mpd_ctx);
 
     len = mpd_to_sci_size(&str, dec, 0);
     dest = RedisModule_CreateString(ctx, str, len);
@@ -298,7 +299,7 @@ int cmd_TO_FIXED(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int cmd_GET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    long long prec;
+    long long digits;
 
     RedisModule_AutoMemory(ctx);
 
@@ -306,15 +307,15 @@ int cmd_GET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    prec = 0;
+    digits = 0;
     if (argc == 3) {
-        if (RedisModule_StringToLongLong(argv[2], &prec) != REDISMODULE_OK) {
-            return RedisModule_ReplyWithError(
-                ctx, "ERR invalid precision parameter");
+        if (RedisModule_StringToLongLong(argv[2], &digits) != REDISMODULE_OK) {
+            return RedisModule_ReplyWithError(ctx,
+                                              "ERR invalid digits parameter");
         }
     }
 
-    return bn_get_helper(ctx, NULL, argv[1], (int)prec);
+    return bn_get_helper(ctx, NULL, argv[1], (int)digits);
 }
 
 int cmd_INCR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -348,7 +349,7 @@ int cmd_DECRBY(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int cmd_HGET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    long long prec;
+    long long digits;
 
     RedisModule_AutoMemory(ctx);
 
@@ -356,15 +357,15 @@ int cmd_HGET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_WrongArity(ctx);
     }
 
-    prec = 0;
+    digits = 0;
     if (argc == 4) {
-        if (RedisModule_StringToLongLong(argv[3], &prec) != REDISMODULE_OK) {
-            return RedisModule_ReplyWithError(
-                ctx, "ERR invalid precision parameter");
+        if (RedisModule_StringToLongLong(argv[3], &digits) != REDISMODULE_OK) {
+            return RedisModule_ReplyWithError(ctx,
+                                              "ERR invalid digits parameter");
         }
     }
 
-    return bn_get_helper(ctx, argv[1], argv[2], (int)prec);
+    return bn_get_helper(ctx, argv[1], argv[2], (int)digits);
 }
 
 int cmd_HINCR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {

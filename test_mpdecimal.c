@@ -3,7 +3,7 @@
 
 static mpd_context_t mpd_ctx;
 
-static mpd_t *decimal(const char *s, int prec) {
+static mpd_t *decimal(const char *s, int digits) {
     mpd_ctx.status = 0;
 
     mpd_t *dec = mpd_new(&mpd_ctx);
@@ -14,8 +14,8 @@ static mpd_t *decimal(const char *s, int prec) {
         return NULL;
     }
 
-    if (prec != 0) {
-        mpd_rescale(dec, dec, -prec, &mpd_ctx);
+    if (digits != 0) {
+        mpd_rescale(dec, dec, -digits, &mpd_ctx);
     }
 
     return dec;
@@ -45,8 +45,7 @@ int main(int argc, char *argv[]) {
     mpd_add(dec, dec, delta, &mpd_ctx);
     mpd_print(dec);
 
-
-    // XXX: no memory free here since just for test purpose
+    // XXX: no memory free here since just for testing purpose
 
     return 0;
 }
