@@ -98,8 +98,8 @@ static inline int bn_op_helper(RedisModuleCtx *ctx, RedisModuleString **argv,
 
 static inline int bn_get_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
                                 RedisModuleString *key, int digits) {
-    static char buf[256];
     size_t len;
+    char *buf;
     char *str;
     const char *val;
     mpd_t *dec;
@@ -115,6 +115,7 @@ static inline int bn_get_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
 
     val = RedisModule_CallReplyStringPtr(reply, &len);
     if (val != NULL) {
+        buf = RedisModule_PoolAlloc(ctx, len + 1);
         memcpy(buf, val, len);
         buf[len] = '\0';
         dec = decimal(buf, digits);
@@ -138,8 +139,8 @@ static inline int bn_get_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
 static inline int bn_incr_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
                                  RedisModuleString *key, mpd_t *delta,
                                  int incr) {
-    static char buf[256];
     size_t len;
+    char *buf;
     char *str;
     const char *val;
     mpd_t *dec;
@@ -155,6 +156,7 @@ static inline int bn_incr_helper(RedisModuleCtx *ctx, RedisModuleString *hash,
 
     val = RedisModule_CallReplyStringPtr(reply, &len);
     if (val != NULL) {
+        buf = RedisModule_PoolAlloc(ctx, len + 1);
         memcpy(buf, val, len);
         buf[len] = '\0';
         dec = decimal(buf, 0);
@@ -264,14 +266,14 @@ int cmd_DIV(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int cmd_TO_FIXED(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
     size_t len;
     char *str;
     long long digits;
     const char *val;
     mpd_t *dec;
     RedisModuleString *dest;
-
-    RedisModule_AutoMemory(ctx);
 
     if (argc != 3) {
         return RedisModule_WrongArity(ctx);
@@ -299,9 +301,9 @@ int cmd_TO_FIXED(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int cmd_GET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    long long digits;
-
     RedisModule_AutoMemory(ctx);
+
+    long long digits;
 
     if (argc < 2 || argc > 3) {
         return RedisModule_WrongArity(ctx);
@@ -349,9 +351,9 @@ int cmd_DECRBY(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 int cmd_HGET(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    long long digits;
-
     RedisModule_AutoMemory(ctx);
+
+    long long digits;
 
     if (argc < 3 || argc > 4) {
         return RedisModule_WrongArity(ctx);
