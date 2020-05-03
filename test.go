@@ -69,6 +69,7 @@ const (
 	OpSUB
 	OpMUL
 	OpDIV
+	OpABS
 	OpTO_FIXED
 	OpINCR
 	OpDECR
@@ -118,6 +119,14 @@ func cmdMul(client *redis.Client) {
 
 func cmdDiv(client *redis.Client) {
 	doCmd(client, "bn.div", _delta, _delta)
+}
+
+func cmdABS(client *redis.Client) {
+	d := "1234567890.0123456789"
+	v := doCmd(client, "bn.abs", "-"+d)
+	if v != d {
+		panic("abs")
+	}
 }
 
 func cmdToFixed(client *redis.Client) {
@@ -279,6 +288,7 @@ func bench() {
 		{OpSUB, "OpSUB", cmdSub},
 		{OpMUL, "OpMUL", cmdMul},
 		{OpDIV, "OpDIV", cmdDiv},
+		{OpABS, "OpABS", cmdABS},
 		{OpTO_FIXED, "OpTO_FIXED", cmdToFixed},
 		{OpINCR, "OpINCR", cmdIncr},
 		{OpDECR, "OpDECR", cmdDecr},

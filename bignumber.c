@@ -265,6 +265,36 @@ int cmd_DIV(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return bn_op_helper(ctx, argv, argc, op_div);
 }
 
+int cmd_ABS(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    size_t len;
+    char *str;
+    const char *val;
+    mpd_t *dec;
+    RedisModuleString *dest;
+
+    if (argc != 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    val = RedisModule_StringPtrLen(argv[1], NULL);
+    dec = decimal(val, 0);
+    if (dec == NULL) {
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    mpd_abs(dec, dec, &mpd_ctx);
+
+    len = mpd_to_sci_size(&str, dec, 0);
+    dest = RedisModule_CreateString(ctx, str, len);
+
+    free(str);
+    mpd_del(dec);
+
+    return RedisModule_ReplyWithString(ctx, dest);
+}
+
 int cmd_TO_FIXED(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -441,6 +471,11 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv,
     }
 
     if (RedisModule_CreateCommand(ctx, "bn.div", cmd_DIV, "readonly fast", 0,
+                                  0, 0) == REDISMODULE_ERR) {
+        return REDISMODULE_ERR;
+    }
+
+    if (RedisModule_CreateCommand(ctx, "bn.abs", cmd_ABS, "readonly fast", 0,
                                   0, 0) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
